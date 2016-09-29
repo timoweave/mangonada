@@ -21,11 +21,8 @@ $(function() {
       [repo, user, ...rest] = url;
     }
     const uri = `/api/repos/${user}/${repo}`;
-    // console.log(123, user, repo, uri);
     $.get(uri, function (data) {
-      console.log(456, data[0], data[1]);
       const tx = new GithubApiInterface(data[1], data[0]);
-      console.log(789, tx.JSONBranches, tx.JSONCommits);
       const rx = new CytoGraph(tx.JSONBranches, tx.JSONCommits);
       rx.addGraph('cy');
     });
@@ -34,11 +31,9 @@ $(function() {
   class CytoGraph {
 
     constructor(JSONbranches, JSONcommits) {
-      // console.log(JSONbranches, JSONcommits);
       this.JSONbranches = JSONbranches;
       this.JSONcommits = JSONcommits;
 
-      // console.log("json commits", this.JSONcommits);
       this.cytoBranches = this.JSONbranches.reduce(this.setupMajorBranch, {});
       this.JSONcommits.map(this.addSubBranchLookup(this.cytoBranches));
       this.cytoNodes = this.JSONcommits.reverse().map(this.mapNode(this.cytoBranches));
@@ -73,7 +68,7 @@ $(function() {
 
         const node = { data : { id : sha1, branch: branch, name : sha5, message: msg0 },
                        position : { x : -x, y: -y } };
-        console.log(node, columnPosition, jsonCommit);
+        // console.log(node, columnPosition, jsonCommit);
         // good node: 807ba7177e64eec020d41a0b59cd11224af8f4fe
         // bad node: a56e73eb92e51b89302a3c802313722831ffcc28
         return node;
@@ -113,7 +108,6 @@ $(function() {
     }
 
     setupMajorBranch(lookup, jsonBranch) {
-      // console.log(999, jsonBranch);
 
       const branch = jsonBranch.name;
       const scale = 100;
@@ -122,7 +116,6 @@ $(function() {
       if ((branch) && (lookup[branch] === undefined)) {
         const location = (Object.keys(lookup).length + 1) * scale;
         lookup[branch] = location;
-        // console.log(888, branch, location);
       }
       return lookup;
     }
@@ -132,7 +125,6 @@ $(function() {
       return jsonCommit.parents.reduce(function (parentEdges, parent) {
                const source = parent.sha;
                const target = jsonCommit.sha;
-               // console.log("source", source, "target", target);
                const edge = { data : { id : [source, target].join('_'), source : source, target : target } };
                parentEdges.push(edge);
                return parentEdges;
@@ -154,7 +146,7 @@ $(function() {
         selector: 'node',
         style: {
           'background-color': '#666',
-          'label': 'data(name)'
+          'label': 'data(branch)'
         }
       } ];
 
