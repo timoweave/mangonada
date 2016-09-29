@@ -188,7 +188,8 @@ class GithubApiInterface {
     if (rightParentCommitObj === undefined) { return; }
     if (rightParentCommitObj.branch !== undefined) { return; /* already labeled */}
 
-    const orphanBranchName = JSONCommitObj.branch + "[" + rightParentCommitObj.sha.slice(0, 5) + "]";
+    const tempBranchName = JSONCommitObj.branch ||"orphan";
+    const orphanBranchName = tempBranchName + "[" + rightParentCommitObj.sha.slice(0, 5) + "]";
     this.JSONBranches[rightParentCommitObj.sha] = { name : orphanBranchName,
                                                     commit : { sha : rightParentCommitObj.sha } };
     rightParentCommitObj.branch =  orphanBranchName;
