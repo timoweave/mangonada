@@ -1,0 +1,117 @@
+/* eslint-disable */
+import React, { Component } from 'react';
+import {Tabs, Tab} from 'material-ui/Tabs';
+import RepoDisplay from '../containers/repo_display';
+import FontIcon from 'material-ui/FontIcon';
+import Timeline from 'material-ui/svg-icons/action/timeline';
+import Equalizer from 'material-ui/svg-icons/av/equalizer';
+import FormatQuote from 'material-ui/svg-icons/editor/format-quote';
+import Bubbles from 'material-ui/svg-icons/editor/bubble-chart';
+// import Person from 'material-ui/svg-icons/action/face';
+
+const About = () => {
+  return (
+      <div>
+         <h1>about us</h1>
+         <ul>
+          <li>hello</li>
+          <li>hey</li>
+          <li>yooo</li>
+          <li>haaaaha</li>
+        </ul>
+      </div>
+  );
+}
+
+const styles = {
+  headline: {
+    fontSize: 24,
+    paddingTop: 16,
+    marginBottom: 12,
+    fontWeight: 400,
+  },
+};
+
+function handleActive(tab) {
+  alert(`A tab with this route property ${tab.props['data-route']} was activated.`);
+}
+
+
+export default class NavTabs extends Component {
+  // need to refactor to use react properly at some point
+  // make DRY?
+
+  constructor(props) {
+    super(props);
+
+    this.elementIds = ['stats', 'word-cloud', 'container', 'bubble-char', 'about-page'];
+
+    this.showElement = this.showElement.bind(this);
+    this.getGitGraph = this.getGitGraph.bind(this);
+    this.getStats = this.getStats.bind(this);
+    this.getWordCloud = this.getWordCloud.bind(this);
+    this.getBubbleChart = this.getBubbleChart.bind(this);
+    this.getAboutPage = this.getAboutPage.bind(this);
+  }
+
+  showElement(showId) {
+    console.log('show element id', showId);
+    this.elementIds.filter((elementId) => elementId !== showId).map((elementId) => {
+      document.getElementById(elementId).className="hidden";
+    });
+    document.getElementById(showId).classList.remove("hidden");
+  }
+
+  getGitGraph(){
+    this.showElement('container');
+  }
+
+  getStats(){
+    this.showElement('stats');
+  }
+
+  getWordCloud(){
+    this.showElement('word-cloud');
+  }
+
+  getBubbleChart(){
+    this.showElement('bubble-chart');
+  }
+
+  getAboutPage(){
+    this.showElement('about-page');
+  }
+
+  render (){
+    return (
+      <Tabs inkBarStyle={{background: 'none'}}>
+      <Tab
+        icon={<Timeline />}
+        style={{margin: '0.5em'}}
+        onActive={this.getGitGraph} >
+      </Tab>
+      <Tab
+        icon={<Equalizer />}
+        style={{margin: '0.5em'}}
+        onActive={this.getStats} >
+      </Tab>
+      <Tab
+        icon={<FormatQuote />}
+        style={{margin: '0.5em'}}
+        onActive={this.getWordCloud} >
+      </Tab>
+      <Tab
+        icon={<Bubbles />}
+        style={{margin: '0.5em'}}
+        onActive={this.getBubbleChart} >
+      </Tab>
+{/*
+      <Tab
+        icon={<Person />}
+        style={{margin: '0.5em'}}
+        onActive={this.getAboutPage} >
+      </Tab>
+*/}
+    </Tabs>
+  )}
+}

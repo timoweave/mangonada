@@ -6,6 +6,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const models = require('./models');
+const config = require('./config');
 
 router.param('userName', (req, res, next, userLabel) => {
   req.user = userLabel;
@@ -24,6 +25,7 @@ router.param('endpoint', (req, res, next, endpointLabel) => {
 
 router.route('/repos/:userName/:repoName')
 .all((req, res, next) => {
+  console.log("all");
   const gitURL = `https://api.github.com/repos/${req.user}/${req.repo}`;
   const userAgent = 'cadeban';
   const secrets = 'client_id=423335fdf206466ccd3b&client_secret=bc10a999efc0335d06b6d84d470b76eda5a97b30';
@@ -40,6 +42,7 @@ router.route('/repos/:userName/:repoName')
 })
  .get(
    (req, res, next) => {
+     console.log("mongo database middleware");
      // mongo database middleware
      const query = { id : req.user_repo };
      models.GithubData.findOne(query, function success_or_fail(error, data) {
@@ -59,22 +62,34 @@ router.route('/repos/:userName/:repoName')
                             repo : data.repo,
                             JSONBranches : data.branches,
                             JSONCommits : data.commits };
-           const commitTable = {};
-           const missingShaTable = {};
-           data.commits.map((commit) => { commitTable[commit.sha] = commit; });
-           data.commits.map((commit) => { commit.parents.map((parent) => {
-             if (commitTable[parent.sha] === undefined) {
-               missingShaTable[parent.sha] = parent.sha;
-             }
-           }); });
-           console.log("mongo db has missing commit", Object.keys(missingShaTable));
+           hasMissingCommits(data);
            res.status(200).json(packet);
            return;
+
+           function hasMissingCommits(data) {
+             const commitTable = {};
+             const missingShaTable = {};
+             data.commits.map((commit) => { commitTable[commit.sha] = commit; });
+             data.commits.map((commit) => { commit.parents.map((parent) => {
+               if (commitTable[parent.sha] === undefined) {
+                 missingShaTable[parent.sha] = parent.sha;
+               }
+             }); });
+
+             if (Object.keys(missingShaTable).length) {
+               console.log("mongo db has missing commit", Object.keys(missingShaTable));
+               return true;
+             } else {
+               return false;
+             }
+           }
+
          }
        }
      });
    },
    (req, res) => {
+     console.log("github api middleware");
      // github api
      const gitURL = `https://api.github.com/repos/${req.user}/${req.repo}`;
      const branchesURL = `${gitURL}/branches`;
@@ -105,13 +120,7 @@ router.route('/repos/:userName/:repoName')
          /**
           * Sorts array of commits by timestamp
           */
-         allFlattenCommits.sort((lhs, rhs) => {
-           if (lhs.commit.committer.date !== rhs.commit.committer.date) {
-             return new Date(lhs.commit.committer.date) - new Date(rhs.commit.committer.date)
-           } else {
-             return new Date(lhs.commit.author.date) - new Date(rhs.commit.author.date)
-           }
-         });
+         allFlattenCommits.sort(sortCommitsByDate);
 
          /**
           * Filters array of commits to remove duplicates
@@ -124,25 +133,28 @@ router.route('/repos/:userName/:repoName')
            return container;
          }, requestAllCommits);
 
+         var foundShaLookup = {};
+         requestAllCommits.commits.map((aCommit) => { foundShaLookup[aCommit.sha] = true; });
+         const commitMissingObjs = requestAllCommits
+                                   .commits
+                                   .reduce(findMissingCommits(foundShaLookup), []);
+
          const jsonData = { id : req.user_repo,
                             repo :  req.repo_overview,
                             branches : branches,
                             commits : requestAllCommits.commits };
-
-         models.GithubData.insertMany([jsonData], function success_or_fail(error, data) {
-
-           if (error) {
-             res.status(400).json({ message : "failed to insert", error });
-             return;
+         var data = new models.GithubData(jsonData);
+         data.save(function(err) {
+           if (err) {
+             res.status(400).json({save : "error", data, err});
+           } else {
+             const packet = { id : data.id,
+                              repo : data.repo,
+                              JSONBranches : data.branches,
+                              JSONCommits : data.commits };
+             res.status(200).json(packet);
            }
-
-           const packet = { id : jsonData.id,
-                            repo : jsonData.repo,
-                            JSONBranches : jsonData.branches,
-                            JSONCommits : jsonData.commits };
-           res.status(200).json(packet);
-           return;
-         });
+         })
        }, (error) => {
          res.status(401).json({ message : 'noooooo', error });
          return;
@@ -164,35 +176,21 @@ router.route('/repos/:userName/:repoName')
              request(commitsOpt).then((commits) => {
                const commitObjs = JSON.parse(commits);
                commitArr.push(...commitObjs);
-               commitArr.sort((lhs, rhs) => {
-                 if (lhs.commit.committer.date !== rhs.commit.committer.date) {
-                   return new Date(lhs.commit.committer.date) - new Date(rhs.commit.committer.date)
-                 } else {
-                   return new Date(lhs.commit.author.date) - new Date(rhs.commit.author.date)
-                 }
-               });
-               commitArr.filter((aCommit, seenCommits = {} ) => { 
-                 if (seenCommits[aCommit.sha]) { return false; }
-                 seenCommits[aCommit.sha] = true;
-                 return true;
-               });
+
+               commitArr.sort(sortCommitsByDate);
+               // commitArr = commitArr.filter(filterOutDuplicates({}));
 
                commitArr.map((aCommit) => { foundShaLookup[aCommit.sha] = true; });
-               const commitMissingObjs = commitArr.reduce((missing, aCommit) => {
-                 aCommit.parents.map((parent) => {
-                   if (foundShaLookup[parent.sha] === undefined) {
-                     foundShaLookup[parent.sha] = true;
-                     missing.push(parent.sha);
-                   }
-                 });
-                 return missing;
-               }, []);
-               console.log("commit requests missing", ith, commitMissingObjs.length, commitMissingObjs);
-
+               const commitMissingObjs = commitArr.reduce(findMissingCommits(foundShaLookup), []);
+               console.log("commits", commitArr.length,
+                           "found", Object.keys(foundShaLookup).length,
+                           "missing", commitMissingObjs.length);
+               // if (commitArr.length === Object.keys(foundShaLookup).length) {
+               // }
                if (commitMissingObjs.length === 0) {
                  console.log("commit requests done", ith, lastSha);
                  resolve(commitArr);
-               } else {
+               } else if (commitMissingObjs.length){
                  getNextCommits(commitMissingObjs.slice(-1).pop(), commitArr, ith++);
                }
              });
@@ -204,3 +202,41 @@ router.route('/repos/:userName/:repoName')
    });
 
 module.exports = router;
+
+
+// functions
+function sortCommitsByDate(lhs, rhs) {
+  if (lhs.commit.committer.date !== rhs.commit.committer.date) {
+    return new Date(lhs.commit.committer.date) - new Date(rhs.commit.committer.date)
+  } else {
+    return new Date(lhs.commit.author.date) - new Date(rhs.commit.author.date)
+  }
+}
+
+function filterOutDuplicates(seenCommits) {
+  return noDups;
+
+  function noDups(aCommit) {
+    if (seenCommits[aCommit.sha]) {
+      return false;
+    } else {
+      seenCommits[aCommit.sha] = true;
+      return true;
+    }
+  }
+}
+
+function findMissingCommits(foundShaLookup) {
+  return missing;
+
+  function missing(missing, aCommit, index) {
+    aCommit.parents.map((parent) => {
+      if (foundShaLookup[parent.sha] === undefined) {
+        foundShaLookup[parent.sha] = true;
+        missing.push(parent.sha);
+        console.log("commit requests missing", index, parent.sha);
+      }
+    });
+    return missing;
+  }
+}

@@ -1,0 +1,11 @@
+
+
+.disable-anchor {
+ pointer-events: none;
+ cursor: default;
+}
+
+.disable-anchor img {
+    filter: alpha(opacity=40);
+    opacity : 0.4;
+}
